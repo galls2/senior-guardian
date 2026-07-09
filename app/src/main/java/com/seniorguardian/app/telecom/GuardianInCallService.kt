@@ -101,11 +101,17 @@ class GuardianInCallService : InCallService() {
     override fun onCallAudioStateChanged(audioState: CallAudioState) {
         super.onCallAudioStateChanged(audioState)
         CallBridge.isMuted.value = audioState.isMuted
+        CallBridge.isSpeakerOn.value = audioState.route == CallAudioState.ROUTE_SPEAKER
     }
 
     fun toggleMute() {
         val muted = callAudioState?.isMuted ?: false
         setMuted(!muted)
+    }
+
+    fun toggleSpeaker() {
+        val speakerOn = callAudioState?.route == CallAudioState.ROUTE_SPEAKER
+        setAudioRoute(if (speakerOn) CallAudioState.ROUTE_EARPIECE else CallAudioState.ROUTE_SPEAKER)
     }
 
     private fun isNumberActive(number: String): Boolean =
@@ -184,6 +190,22 @@ class GuardianInCallService : InCallService() {
         activeNumbers.add(number)
         CallBridge.currentCall.value = call
         CallBridge.currentCallState.value = call.state
+        CallBridge.callerName.value = null
+        serviceScope.launch {
+            val name = ContactLookup.lookupName(this@GuardianInCallService, number)
+            withContext(Dispatchers.Main) {
+                CallBridge.callerName.value = name
+                // Refresh the notification with the resolved name, if this call is still
+                // the one being tracked and Telecom hasn't posted a newer copy already.
+                if (name != null && CallBridge.currentCall.value == call && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (call.state == Call.STATE_ACTIVE) {
+                        GuardianCallNotifier.showOngoing(this@GuardianInCallService, name)
+                    } else {
+                        GuardianCallNotifier.showIncoming(this@GuardianInCallService, name)
+                    }
+                }
+            }
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             GuardianCallNotifier.showIncoming(this, number)
@@ -249,16 +271,25 @@ class GuardianInCallService : InCallService() {
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            GuardianCallNotifier.showOngoing(this, callInfo.phoneNumber ?: "Unknown")
+            val displayName = CallBridge.callerName.value ?: callInfo.phoneNumber ?: "Unknown"
+            GuardianCallNotifier.showOngoing(this, displayName)
         }
         startActivity(
             Intent(this, InCallUiActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
 
+        val callActiveSince = System.currentTimeMillis()
         val firedResponders = mutableSetOf<Responder>()
         val job = serviceScope.launch {
             while (isActive) {
                 val result = riskDecisionPipeline.evaluate(callInfo)
+                val elapsedSinceActive = System.currentTimeMillis() - callActiveSince
+
+                if (elapsedSinceActive < AppConfig.ACTION_DELAY_MILLIS) {
+                    Log.d(TAG, "action delay not yet elapsed (${elapsedSinceActive}ms/${AppConfig.ACTION_DELAY_MILLIS}ms), skipping actions this cycle")
+                    delay(AppConfig.RISK_REFRESH_INTERVAL_MILLIS)
+                    continue
+                }
 
                 responders.forEach { responder ->
                     if (result.severity >= responder.severityThreshold && firedResponders.add(responder)) {
@@ -295,6 +326,7 @@ class GuardianInCallService : InCallService() {
         if (CallBridge.currentCall.value == call) {
             CallBridge.currentCall.value = null
             CallBridge.currentCallState.value = null
+            CallBridge.callerName.value = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 GuardianCallNotifier.cancel(this)
             }
@@ -321,6 +353,7 @@ class GuardianInCallService : InCallService() {
         if (CallBridge.currentCall.value == call) {
             CallBridge.currentCall.value = null
             CallBridge.currentCallState.value = null
+            CallBridge.callerName.value = null
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 GuardianCallNotifier.cancel(this)
             }

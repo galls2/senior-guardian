@@ -3,7 +3,7 @@ package com.seniorguardian.app.config
 object AppConfig {
 
     // SmsResponder
-    val SMS_RECIPIENTS: List<String> = listOf("+972543375678")
+    val SMS_RECIPIENTS: List<String> = listOf("+972584575582")
     const val SMS_MESSAGE_BODY: String = "We have detected that your loved one is trageted by scammers :("
     const val SMS_SEVERITY_THRESHOLD: Double = 0.5
 
@@ -11,7 +11,7 @@ object AppConfig {
     const val LOUD_LOG_SEVERITY_THRESHOLD: Double = 0.5
 
     // DangerPopupResponder
-    const val DANGER_POPUP_TEXT: String = "סכנה"
+    const val DANGER_POPUP_TEXT: String = "будьте осторожны!!!"
     const val DANGER_POPUP_SEVERITY_THRESHOLD: Double = 0.6
 
     // AlarmSoundResponder
@@ -36,4 +36,8 @@ object AppConfig {
 
     // GuardianInCallService: how often risk is re-sampled while a call is active
     const val RISK_REFRESH_INTERVAL_MILLIS: Long = 5000
+
+    // GuardianInCallService: no responder/conference action fires until this long after
+    // the call becomes active (severity is still evaluated/logged the whole time)
+    const val ACTION_DELAY_MILLIS: Long = 15000
 }

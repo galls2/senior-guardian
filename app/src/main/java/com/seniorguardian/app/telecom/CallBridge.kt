@@ -7,4 +7,6 @@ object CallBridge {
     val currentCall = MutableStateFlow<Call?>(null)
     val currentCallState = MutableStateFlow<Int?>(null)
     val isMuted = MutableStateFlow(false)
+    val isSpeakerOn = MutableStateFlow(false)
+    val callerName = MutableStateFlow<String?>(null)
 }

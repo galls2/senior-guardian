@@ -42,7 +42,15 @@ class InCallUiActivity : ComponentActivity() {
                     val call by CallBridge.currentCall.collectAsState()
                     val state by CallBridge.currentCallState.collectAsState()
                     val isMuted by CallBridge.isMuted.collectAsState()
-                    InCallScreen(call = call, state = state, isMuted = isMuted)
+                    val isSpeakerOn by CallBridge.isSpeakerOn.collectAsState()
+                    val callerName by CallBridge.callerName.collectAsState()
+                    InCallScreen(
+                        call = call,
+                        state = state,
+                        isMuted = isMuted,
+                        isSpeakerOn = isSpeakerOn,
+                        callerName = callerName
+                    )
                 }
             }
         }
@@ -50,7 +58,13 @@ class InCallUiActivity : ComponentActivity() {
 }
 
 @Composable
-private fun InCallScreen(call: Call?, state: Int?, isMuted: Boolean) {
+private fun InCallScreen(
+    call: Call?,
+    state: Int?,
+    isMuted: Boolean,
+    isSpeakerOn: Boolean,
+    callerName: String?
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -65,10 +79,11 @@ private fun InCallScreen(call: Call?, state: Int?, isMuted: Boolean) {
             Spacer(modifier = Modifier.height(1.dp))
         } else {
             val number = call.details.handle?.schemeSpecificPart ?: "Unknown"
+            val displayName = callerName ?: number
             val callState = state ?: call.state
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = number, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Medium)
+                Text(text = displayName, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = callStateLabel(callState), color = Color.LightGray, fontSize = 16.sp)
             }
@@ -104,6 +119,11 @@ private fun InCallScreen(call: Call?, state: Int?, isMuted: Boolean) {
                         label = if (isMuted) "🔇" else "🎤",
                         backgroundColor = if (isMuted) Color(0xFF616161) else Color(0xFF424242),
                         onClick = { GuardianInCallService.instance?.toggleMute() }
+                    )
+                    CallActionButton(
+                        label = "🔊",
+                        backgroundColor = if (isSpeakerOn) Color(0xFF1565C0) else Color(0xFF424242),
+                        onClick = { GuardianInCallService.instance?.toggleSpeaker() }
                     )
                     CallActionButton(
                         label = "✖",
