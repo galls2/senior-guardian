@@ -14,6 +14,9 @@ object AppConfig {
     const val DANGER_POPUP_TEXT: String = "סכנה"
     const val DANGER_POPUP_SEVERITY_THRESHOLD: Double = 0.6
 
+    // AlarmSoundResponder
+    const val ALARM_SOUND_SEVERITY_THRESHOLD: Double = 1.1
+
     // HangUpResponder
     // Temporarily disabled for testing: severity maxes out at 1.0, so 1.1 can never be reached.
     // Restore to 0.9 to re-enable.

@@ -10,6 +10,7 @@ import android.telecom.TelecomManager
 import android.telephony.PhoneNumberUtils
 import android.util.Log
 import com.seniorguardian.app.config.AppConfig
+import com.seniorguardian.app.risk.AlarmSoundResponder
 import com.seniorguardian.app.risk.CallInfo
 import com.seniorguardian.app.risk.DangerPopupResponder
 import com.seniorguardian.app.risk.HangUpResponder
@@ -40,6 +41,7 @@ class GuardianInCallService : InCallService() {
         LoudLogResponder(),
         SmsResponder(this),
         DangerPopupResponder(this),
+        AlarmSoundResponder(this),
         HangUpResponder()
     )
 
@@ -66,20 +68,24 @@ class GuardianInCallService : InCallService() {
     // blocked.
     private val activeNumbers = mutableSetOf<String>()
 
-    // Numbers for which a conference merge has already completed successfully — permanent
-    // for the life of the service, deliberately not cleared on disconnect. Observed on the
-    // real device: once the conference leg merges, the *original* call's own Call object
-    // can itself report STATE_DISCONNECTED shortly after (the OEM stack tearing down/
-    // replacing the pre-merge connection), which triggers our normal disconnect cleanup and
-    // reopens both numbers in `activeNumbers`. Without this permanent record, the self-heal
-    // loop then sees Telecom still reporting an active call (the ongoing conference itself)
-    // with nothing bridged, and re-adopts it — re-running the entire pipeline, including a
-    // second conference dial. Once a number has successfully conferenced, we never
-    // re-trigger the pipeline for it again this session.
-    private val conferenceCompletedNumbers = mutableSetOf<String>()
+    // Numbers for which a conference merge completed recently (number -> completion time).
+    // Observed on the real device: once the conference leg merges, the *original* call's
+    // own Call object can itself report STATE_DISCONNECTED shortly after (the OEM stack
+    // tearing down/replacing the pre-merge connection), which triggers our normal disconnect
+    // cleanup and reopens both numbers in `activeNumbers`. Without suppressing this, the
+    // self-heal loop then sees Telecom still reporting an active call (the ongoing
+    // conference itself) with nothing bridged, and re-adopts it — re-running the entire
+    // pipeline, including a second conference dial. This is deliberately time-bounded
+    // (CONFERENCE_COOLDOWN_MILLIS), not permanent: the redelivery churn resolves within a
+    // few seconds, and a genuinely new later call from the same number must still be
+    // adopted normally once the cooldown has passed.
+    private val conferenceCompletedNumbers = mutableMapOf<String, Long>()
 
-    private fun isConferenceCompleted(number: String): Boolean =
-        conferenceCompletedNumbers.any { PhoneNumberUtils.compare(number, it) }
+    private fun isConferenceCompleted(number: String): Boolean {
+        val now = System.currentTimeMillis()
+        conferenceCompletedNumbers.entries.removeAll { now - it.value > CONFERENCE_COOLDOWN_MILLIS }
+        return conferenceCompletedNumbers.keys.any { PhoneNumberUtils.compare(number, it) }
+    }
 
     private var conferenceAttempt: ConferenceAttempt? = null
 
@@ -144,8 +150,9 @@ class GuardianInCallService : InCallService() {
                                 Log.d(TAG, "merging conference leg")
                                 attempt.originalCall.conference(call)
                                 conferenceAttempt = null
-                                conferenceCompletedNumbers.add(number)
-                                if (originalNumber != null) conferenceCompletedNumbers.add(originalNumber)
+                                val now = System.currentTimeMillis()
+                                conferenceCompletedNumbers[number] = now
+                                if (originalNumber != null) conferenceCompletedNumbers[originalNumber] = now
                                 call.unregisterCallback(this)
                             }
                             Call.STATE_DISCONNECTED -> {
@@ -330,5 +337,6 @@ class GuardianInCallService : InCallService() {
         var instance: GuardianInCallService? = null
         private const val TAG = "GuardianInCallService"
         private const val SELF_HEAL_INTERVAL_MILLIS = 3000L
+        private const val CONFERENCE_COOLDOWN_MILLIS = 20000L
     }
 }
