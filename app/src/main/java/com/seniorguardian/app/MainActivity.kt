@@ -1,7 +1,7 @@
 package com.seniorguardian.app
 
 import android.Manifest
-import android.content.Intent
+import android.app.role.RoleManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -26,11 +26,16 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
-    private var monitoringEnabled by mutableStateOf(false)
+    private var dialerRoleHeld by mutableStateOf(false)
 
     private val permissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            checkAndStartService()
+            requestDialerRoleIfNeeded()
+        }
+
+    private val roleLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            refreshStatus()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,8 +44,8 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     MainScreen(
-                        monitoringEnabled = monitoringEnabled,
-                        onEnableClick = { requestPermissionsOrStart() }
+                        dialerRoleHeld = dialerRoleHeld,
+                        onEnableClick = { requestPermissionsOrRole() }
                     )
                 }
             }
@@ -49,25 +54,41 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        monitoringEnabled = hasAllPermissions()
+        refreshStatus()
     }
 
-    private fun requestPermissionsOrStart() {
+    private fun refreshStatus() {
+        dialerRoleHeld = hasAllPermissions() && isDialerRoleHeld()
+    }
+
+    private fun requestPermissionsOrRole() {
         val missing = requiredPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
         if (missing.isNotEmpty()) {
             permissionsLauncher.launch(missing.toTypedArray())
         } else {
-            checkAndStartService()
+            requestDialerRoleIfNeeded()
         }
     }
 
-    private fun checkAndStartService() {
-        if (hasAllPermissions()) {
-            ContextCompat.startForegroundService(this, Intent(this, CallOverlayService::class.java))
-            monitoringEnabled = true
+    private fun requestDialerRoleIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            refreshStatus()
+            return
         }
+        val roleManager = getSystemService(RoleManager::class.java)
+        if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+            roleLauncher.launch(roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER))
+        } else {
+            refreshStatus()
+        }
+    }
+
+    private fun isDialerRoleHeld(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+        val roleManager = getSystemService(RoleManager::class.java)
+        return roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
     }
 
     private fun hasAllPermissions(): Boolean = requiredPermissions().all {
@@ -79,7 +100,8 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CALL_LOG,
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.SEND_SMS
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.CALL_PHONE
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -89,7 +111,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MainScreen(monitoringEnabled: Boolean, onEnableClick: () -> Unit) {
+private fun MainScreen(dialerRoleHeld: Boolean, onEnableClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -102,7 +124,7 @@ private fun MainScreen(monitoringEnabled: Boolean, onEnableClick: () -> Unit) {
             Text(text = "Enable Call Alert")
         }
         Text(
-            text = if (monitoringEnabled) "Call monitoring is active" else "Call monitoring is off",
+            text = if (dialerRoleHeld) "Set as default dialer — monitoring active" else "Not yet default dialer",
             modifier = Modifier.padding(top = 16.dp)
         )
     }

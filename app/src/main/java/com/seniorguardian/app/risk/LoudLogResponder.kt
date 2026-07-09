@@ -1,15 +1,13 @@
 package com.seniorguardian.app.risk
 
 import android.util.Log
+import com.seniorguardian.app.config.AppConfig
 
 class LoudLogResponder : Responder {
+    override val severityThreshold: Double = AppConfig.LOUD_LOG_SEVERITY_THRESHOLD
+
     override fun respond(callInfo: CallInfo) {
-        Log.e(
-            TAG,
-            "\n" + "!".repeat(60) +
-                "\n!!! ALERT: risky call detected from ${callInfo.phoneNumber ?: "unknown number"} !!!" +
-                "\n" + "!".repeat(60)
-        )
+        Log.e(TAG, "ALERT: risky call from ${callInfo.phoneNumber ?: "unknown number"}")
     }
 
     private companion object {

@@ -7,6 +7,8 @@ import android.util.Log
 import com.seniorguardian.app.config.AppConfig
 
 class SmsResponder(private val context: Context) : Responder {
+    override val severityThreshold: Double = AppConfig.SMS_SEVERITY_THRESHOLD
+
     override fun respond(callInfo: CallInfo) {
         val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             context.getSystemService(SmsManager::class.java)
