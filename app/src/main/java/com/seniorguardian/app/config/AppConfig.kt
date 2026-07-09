@@ -23,11 +23,13 @@ object AppConfig {
     const val KNOWN_CALLER_LOOKBACK_DAYS: Long = 30
 
     // BlacklistDetector
-    val BLACKLIST_NUMBERS: List<String> = listOf("+972584575582") // stephanie
+//    val BLACKLIST_NUMBERS: List<String> = listOf("+972584575582") // stephanie
+    val BLACKLIST_NUMBERS: List<String> = listOf("+972544216482") // anna
+
 
     // GuardianInCallService: auto-conference trigger
     const val CONFERENCE_CALL_SEVERITY_THRESHOLD: Double = 0.75
-    const val CONFERENCE_CALL_NUMBER: String = "+972549995376"
+    const val CONFERENCE_CALL_NUMBER: String = "+972544918552" // veronica
 
     // GuardianInCallService: how often risk is re-sampled while a call is active
     const val RISK_REFRESH_INTERVAL_MILLIS: Long = 5000
